@@ -22,21 +22,31 @@ def stratified_split(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     assert abs(train_size + val_size + test_size - 1.0) < 1e-6
 
+    # For classes with very few samples, force at least 1 into each split
+    rare_mask = df["label"].isin(
+        df["label"].value_counts()[lambda x: x < 4].index
+    )
+    rare_df = df[rare_mask]
+    main_df = df[~rare_mask]
+
+    # Split the main (non-rare) portion normally
     train_df, temp_df = train_test_split(
-        df,
-        test_size=(1 - train_size),
-        stratify=df["label"],
-        random_state=seed,
+        main_df, test_size=(1 - train_size),
+        stratify=main_df["label"], random_state=seed,
     )
-
     val_ratio_adjusted = val_size / (val_size + test_size)
-
     val_df, test_df = train_test_split(
-        temp_df,
-        test_size=(1 - val_ratio_adjusted),
-        stratify=temp_df["label"],
-        random_state=seed,
+        temp_df, test_size=(1 - val_ratio_adjusted),
+        stratify=temp_df["label"], random_state=seed,
     )
+
+    # Distribute rare samples round-robin across splits
+    for _, group in rare_df.groupby("label"):
+        rows = group.sample(frac=1, random_state=seed).reset_index(drop=True)
+        splits = [train_df, val_df, test_df]
+        for i, (_, row) in enumerate(rows.iterrows()):
+            splits[i % 3] = pd.concat([splits[i % 3], row.to_frame().T])
+        train_df, val_df, test_df = splits
 
     def check_dist(df, name):
         print(f"\n{name}")
@@ -46,7 +56,7 @@ def stratified_split(
     check_dist(val_df, "Val")
     check_dist(test_df, "Test")
 
-    return train_df.drop(columns=['label']), val_df.drop(columns=['label']), test_df.drop(columns=['label'])
+    return train_df.drop(columns=['label', 'UNK']), val_df.drop(columns=['label', 'UNK']), test_df.drop(columns=['label', 'UNK'])
 
 
 def save_splits(
