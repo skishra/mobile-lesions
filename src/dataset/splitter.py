@@ -72,11 +72,16 @@ def save_splits(
     test_df.to_csv(out_dir / "test.csv", index=False)
 
 
-if __name__ == "__main__":
-    gt_path = Path("src/dataset/lesions-kaggle/ISIC_2019_Training_GroundTruth.csv")
+def main():
+    gt_path = Path(
+        "src/dataset/lesions-kaggle/ISIC_2019_Training_GroundTruth.csv")
     split_dir = Path("src/dataset/after_split")
 
     df = load_ground_truth(gt_path)
     train_df, val_df, test_df = stratified_split(df)
 
     save_splits(train_df, val_df, test_df, split_dir)
+
+
+if __name__ == "__main__":
+    main()

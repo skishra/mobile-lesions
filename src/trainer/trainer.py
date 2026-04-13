@@ -34,7 +34,8 @@ class Trainer:
         self.max_grad_norm = max_grad_norm
         self.class_names = class_names
 
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or (
+            "cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
         self.criterion = nn.BCEWithLogitsLoss()
@@ -69,7 +70,8 @@ class Trainer:
 
             if self.max_grad_norm:
                 self.scaler.unscale_(self.optimizer)
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.max_grad_norm)
 
             self.scaler.step(self.optimizer)
             self.scaler.update()
@@ -113,7 +115,8 @@ class Trainer:
 
         # Macro AUC across all classes
         try:
-            auc = roc_auc_score(all_labels, all_probs, average="macro", multi_class="ovr")
+            auc = roc_auc_score(all_labels, all_probs,
+                                average="macro", multi_class="ovr")
         except ValueError:
             auc = 0.0  # Can happen if a class has no positive samples in the split
 
@@ -151,7 +154,8 @@ class Trainer:
                 val_loss, val_auc, val_report = self.evaluate(self.val_loader)
                 self.history["val_loss"].append(val_loss)
                 self.history["val_auc"].append(val_auc)
-                print(f"  Val Loss:   {val_loss:.4f}  |  Val AUC: {val_auc:.4f}")
+                print(
+                    f"  Val Loss:   {val_loss:.4f}  |  Val AUC: {val_auc:.4f}")
 
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
@@ -172,24 +176,27 @@ class Trainer:
 
         # Reload best weights at end of training
         if self.val_loader is not None:
-            self.model.load_state_dict(torch.load(self.save_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(
+                self.save_path, map_location=self.device))
             print(f"\nLoaded best model (val_loss={self.best_val_loss:.4f})")
 
         return self.history
 
     def test(self, test_loader):
-        self.model.load_state_dict(torch.load(self.save_path, map_location=self.device))
+        self.model.load_state_dict(torch.load(
+            self.save_path, map_location=self.device))
         evaluator = Evaluator(
             self.model, test_loader,
             device=self.device, threshold=self.threshold,
             class_names=self.class_names, use_amp=self.use_amp,
         )
         results = evaluator.evaluate()
-        print(f"\nTest Loss: {results['loss']:.4f}  |  Test AUC: {results['macro_auc']:.4f}")
+        print(
+            f"\nTest Loss: {results['loss']:.4f}  |  Test AUC: {results['macro_auc']:.4f}")
         for cls, metrics in results["report"].items():
             if isinstance(metrics, dict):
                 print(f"  {cls:>20s}  precision={metrics['precision']:.3f}  "
-                    f"recall={metrics['recall']:.3f}  f1={metrics['f1-score']:.3f}")
+                      f"recall={metrics['recall']:.3f}  f1={metrics['f1-score']:.3f}")
         return results
 
 
@@ -229,9 +236,12 @@ def main():
     test_csv = Path("src/dataset/after_split/test.csv")
     image_dir = Path("src/dataset/lesions-kaggle/ISIC_2019_Training_Input/")
 
-    train_dataset = ISIC2019Dataset(csv_file=train_csv, image_dir=image_dir, transform=train_transform)
-    val_dataset = ISIC2019Dataset(csv_file=val_csv, image_dir=image_dir, transform=val_transform)
-    test_dataset = ISIC2019Dataset(csv_file=test_csv, image_dir=image_dir, transform=val_transform)
+    train_dataset = ISIC2019Dataset(
+        csv_file=train_csv, image_dir=image_dir, transform=train_transform)
+    val_dataset = ISIC2019Dataset(
+        csv_file=val_csv, image_dir=image_dir, transform=val_transform)
+    test_dataset = ISIC2019Dataset(
+        csv_file=test_csv, image_dir=image_dir, transform=val_transform)
 
     NUM_WORKERS = 4
     train_loader = DataLoader(
@@ -253,7 +263,8 @@ def main():
         num_classes=len(train_dataset.classes),
     )
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=1e-4, weight_decay=1e-4)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
 
@@ -272,5 +283,104 @@ def main():
     # Final test evaluation
     trainer.test(test_loader)
 
+
 if __name__ == "__main__":
     main()
+
+
+"""
+Output:
+
+Epoch [1/20]  lr=1.00e-04
+  Train Loss: 0.3721                                                                                                                                                                                                                                                      
+  Val Loss:   0.1904  |  Val AUC: 0.8866                                                                                                                                                                                                                                  
+  ✓ Saved best model
+
+Epoch [2/20]  lr=9.94e-05
+  Train Loss: 0.1745                                                                                                                                                                                                                                                      
+  Val Loss:   0.1788  |  Val AUC: 0.9203                                                                                                                                                                                                                                  
+  ✓ Saved best model
+
+Epoch [3/20]  lr=9.76e-05
+  Train Loss: 0.1521                                                                                                                                                                                                                                                      
+  Val Loss:   0.1498  |  Val AUC: 0.9392                                                                                                                                                                                                                                  
+  ✓ Saved best model
+
+Epoch [4/20]  lr=9.46e-05
+  Train Loss: 0.1307                                                                                                                                                                                                                                                      
+  Val Loss:   0.1593  |  Val AUC: 0.9295                                                                                                                                                                                                                                  
+  No improvement for 1/7 epochs
+
+Epoch [5/20]  lr=9.05e-05
+  Train Loss: 0.1182                                                                                                                                                                                                                                                      
+  Val Loss:   0.1524  |  Val AUC: 0.9396                                                                                                                                                                                                                                  
+  No improvement for 2/7 epochs
+
+Epoch [6/20]  lr=8.54e-05
+  Train Loss: 0.1092                                                                                                                                                                                                                                                      
+  Val Loss:   0.1682  |  Val AUC: 0.9355                                                                                                                                                                                                                                  
+  No improvement for 3/7 epochs
+
+Epoch [7/20]  lr=7.94e-05
+  Train Loss: 0.0936                                                                                                                                                                                                                                                      
+  Val Loss:   0.1456  |  Val AUC: 0.9501                                                                                                                                                                                                                                  
+  ✓ Saved best model
+
+Epoch [8/20]  lr=7.27e-05
+  Train Loss: 0.0799                                                                                                                                                                                                                                                      
+  Val Loss:   0.1296  |  Val AUC: 0.9530                                                                                                                                                                                                                                  
+  ✓ Saved best model
+
+Epoch [9/20]  lr=6.55e-05
+  Train Loss: 0.0700                                                                                                                                                                                                                                                      
+  Val Loss:   0.1306  |  Val AUC: 0.9593                                                                                                                                                                                                                                  
+  No improvement for 1/7 epochs
+
+Epoch [10/20]  lr=5.78e-05
+  Train Loss: 0.0608                                                                                                                                                                                                                                                      
+  Val Loss:   0.1464  |  Val AUC: 0.9528                                                                                                                                                                                                                                  
+  No improvement for 2/7 epochs
+
+Epoch [11/20]  lr=5.00e-05
+  Train Loss: 0.0495                                                                                                                                                                                                                                                      
+  Val Loss:   0.1356  |  Val AUC: 0.9510                                                                                                                                                                                                                                  
+  No improvement for 3/7 epochs
+
+Epoch [12/20]  lr=4.22e-05
+  Train Loss: 0.0426                                                                                                                                                                                                                                                      
+  Val Loss:   0.1551  |  Val AUC: 0.9539                                                                                                                                                                                                                                  
+  No improvement for 4/7 epochs
+
+Epoch [13/20]  lr=3.45e-05
+  Train Loss: 0.0335                                                                                                                                                                                                                                                      
+  Val Loss:   0.1755  |  Val AUC: 0.9469                                                                                                                                                                                                                                  
+  No improvement for 5/7 epochs
+
+Epoch [14/20]  lr=2.73e-05
+  Train Loss: 0.0322                                                                                                                                                                                                                                                      
+  Val Loss:   0.1768  |  Val AUC: 0.9458                                                                                                                                                                                                                                  
+  No improvement for 6/7 epochs
+
+Epoch [15/20]  lr=2.06e-05
+  Train Loss: 0.0250                                                                                                                                                                                                                                                      
+  Val Loss:   0.1783  |  Val AUC: 0.9483                                                                                                                                                                                                                                  
+  No improvement for 7/7 epochs
+
+Early stopping at epoch 15
+
+Loaded best model (val_loss=0.1296)
+                                                                                                                                                                                                                                                                          
+Test Loss: 0.1401  |  Test AUC: 0.9517
+                   MEL  precision=0.870  recall=0.457  f1=0.599
+                    NV  precision=0.834  recall=0.933  f1=0.881
+                   BCC  precision=0.837  recall=0.759  f1=0.796
+                    AK  precision=0.806  recall=0.287  f1=0.424
+                   BKL  precision=0.831  recall=0.450  f1=0.584
+                    DF  precision=0.846  recall=0.458  f1=0.595
+                  VASC  precision=0.800  recall=0.320  f1=0.457
+                   SCC  precision=0.704  recall=0.302  f1=0.422
+             micro avg  precision=0.836  recall=0.727  f1=0.778
+             macro avg  precision=0.816  recall=0.496  f1=0.595
+          weighted avg  precision=0.836  recall=0.727  f1=0.755
+           samples avg  precision=0.724  recall=0.727  f1=0.725
+"""
