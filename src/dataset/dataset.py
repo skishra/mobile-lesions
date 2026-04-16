@@ -13,6 +13,9 @@ class ISIC2019Dataset(Dataset):
         self.transform = transform
         self.img_ext = img_ext
 
+        # Class columns (everything except 'image')
+        self.classes = self.df.columns[1:].tolist()
+
         if "image" not in self.df.columns:
             raise ValueError(
                 f"CSV must have an 'image' column. Found: {self.df.columns.tolist()}")

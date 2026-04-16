@@ -1,14 +1,13 @@
 import torch
 import numpy as np
 from sklearn.metrics import roc_auc_score, classification_report
-from torch.amp import autocast
 from tqdm import tqdm
 import torch.nn as nn
 
 
 class Evaluator:
     def __init__(self, model, test_loader, device=None, threshold=0.5,
-                 class_names=None, use_amp=True):
+                 class_names=None):
         self.model = model
         self.test_loader = test_loader
         self.threshold = threshold
@@ -19,7 +18,6 @@ class Evaluator:
         self.model.eval()
 
         self.criterion = nn.BCEWithLogitsLoss()
-        self.use_amp = use_amp and self.device == "cuda"
 
     @torch.no_grad()
     def evaluate(self):
@@ -33,9 +31,8 @@ class Evaluator:
             images = images.to(self.device, non_blocking=True)
             labels = labels.to(self.device, non_blocking=True)
 
-            with autocast(device_type="cuda", enabled=self.use_amp):
-                outputs = self.model(images)
-                loss = self.criterion(outputs, labels)
+            outputs = self.model(images)
+            loss = self.criterion(outputs, labels)
 
             total_loss += loss.item()
             probs = torch.sigmoid(outputs).cpu().numpy()

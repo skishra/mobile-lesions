@@ -207,8 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 # Custom
-lesions-kaggle
-lesions-kaggle/*
 *.jpg
 *.csv
 *.pt
