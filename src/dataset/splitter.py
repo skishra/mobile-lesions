@@ -1,4 +1,5 @@
 from pathlib import Path
+import zipfile
 from typing import Tuple
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -6,10 +7,53 @@ from sklearn.model_selection import train_test_split
 
 LABEL_COLS = ["MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"]
 
+def extract_archive_if_needed():
+    dir = Path("src/dataset")
+    archive_dir = dir / "archive"
+    zip_file = dir / "archive.zip"
+
+    if archive_dir.is_dir():
+        if any(archive_dir.iterdir()): 
+            if zip_file.is_file():
+                zip_file.unlink()
+                print("The 'archive' subdirectory already exists. 'archive.zip' deleted.")
+            else:
+                print("The 'archive' subdirectory already exists.")
+            return
+        else:
+            print("The 'archive' directory exists but is empty. Proceeding with extraction...")
+    
+    if zip_file.is_file():
+        try:
+            print("Extracting 'archive.zip'")
+            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                zip_ref.extractall(dir)
+            print("Extraction complete.")
+            
+            zip_file.unlink()
+            print("'archive.zip' has been deleted.")
+            
+        except (zipfile.BadZipFile, PermissionError) as e:
+            print(f"Extraction failed: {e}")
+            print("'archive.zip' was not deleted.")
+    else:
+        print("Neither the 'archive' folder nor 'archive.zip' was found.")
+
+
+def drop_zero_variance_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    """Drops only numeric columns with a mathematical variance of exactly 0."""
+
+    numeric_df = df.select_dtypes(include='number')
+    
+    zero_var_cols = numeric_df.columns[numeric_df.var() == 0]
+    
+    return df.drop(columns=zero_var_cols)
+
 
 def load_ground_truth(gt_path: Path) -> pd.DataFrame:
     df = pd.read_csv(gt_path)
     df["label"] = df[LABEL_COLS].idxmax(axis=1)
+    df = drop_zero_variance_numeric(df)
     return df
 
 
@@ -22,14 +66,12 @@ def stratified_split(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     assert abs(train_size + val_size + test_size - 1.0) < 1e-6
 
-    # For classes with very few samples, force at least 1 into each split
     rare_mask = df["label"].isin(
         df["label"].value_counts()[lambda x: x < 4].index
     )
     rare_df = df[rare_mask]
     main_df = df[~rare_mask]
 
-    # Split the main (non-rare) portion normally
     train_df, temp_df = train_test_split(
         main_df, test_size=(1 - train_size),
         stratify=main_df["label"], random_state=seed,
@@ -40,7 +82,6 @@ def stratified_split(
         stratify=temp_df["label"], random_state=seed,
     )
 
-    # Distribute rare samples round-robin across splits
     for _, group in rare_df.groupby("label"):
         rows = group.sample(frac=1, random_state=seed).reset_index(drop=True)
         splits = [train_df, val_df, test_df]
@@ -56,7 +97,7 @@ def stratified_split(
     check_dist(val_df, "Val")
     check_dist(test_df, "Test")
 
-    return train_df.drop(columns=['label', 'UNK']), val_df.drop(columns=['label', 'UNK']), test_df.drop(columns=['label', 'UNK'])
+    return train_df.drop(columns=['label']), val_df.drop(columns=['label']), test_df.drop(columns=['label'])
 
 
 def save_splits(
@@ -73,8 +114,10 @@ def save_splits(
 
 
 def main():
+    extract_archive_if_needed()
+
     gt_path = Path(
-        "src/dataset/lesions-kaggle/ISIC_2019_Training_GroundTruth.csv")
+        "src/dataset/archive/ISIC_2019_Training_GroundTruth.csv")
     split_dir = Path("src/dataset/after_split")
 
     df = load_ground_truth(gt_path)

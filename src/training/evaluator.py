@@ -6,18 +6,16 @@ import torch.nn as nn
 
 
 class Evaluator:
-    def __init__(self, model, test_loader, device=None, threshold=0.5,
-                 class_names=None):
+    def __init__(self, model, test_loader, device=None, class_names=None):
         self.model = model
         self.test_loader = test_loader
-        self.threshold = threshold
         self.class_names = class_names
         self.device = device or (
             "cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
         self.model.eval()
 
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.criterion = nn.CrossEntropyLoss()
 
     @torch.no_grad()
     def evaluate(self):
@@ -31,11 +29,16 @@ class Evaluator:
             images = images.to(self.device, non_blocking=True)
             labels = labels.to(self.device, non_blocking=True)
 
+            if labels.ndim > 1:
+                labels = labels.argmax(dim=1)
+            labels = labels.long()
+
             outputs = self.model(images)
             loss = self.criterion(outputs, labels)
 
             total_loss += loss.item()
-            probs = torch.sigmoid(outputs).cpu().numpy()
+            
+            probs = torch.softmax(outputs, dim=1).cpu().numpy()
             all_probs.append(probs)
             all_labels.append(labels.cpu().numpy())
             loop.set_postfix(loss=f"{loss.item():.4f}")
@@ -44,25 +47,27 @@ class Evaluator:
         all_labels = np.concatenate(all_labels, axis=0)
         avg_loss = total_loss / len(self.test_loader)
 
-        # Per-class AUC
-        num_classes = all_labels.shape[1]
+        num_classes = len(self.class_names) if self.class_names else all_probs.shape[1]
         per_class_auc = {}
+        
         for i in range(num_classes):
-            if len(np.unique(all_labels[:, i])) < 2:
+            binary_labels_for_class = (all_labels == i).astype(int)
+            
+            if len(np.unique(binary_labels_for_class)) < 2:
                 per_class_auc[i] = float("nan")
             else:
                 per_class_auc[i] = roc_auc_score(
-                    all_labels[:, i], all_probs[:, i])
+                    binary_labels_for_class, all_probs[:, i]
+                )
 
-        # Macro AUC
         try:
             macro_auc = roc_auc_score(
-                all_labels, all_probs, average="macro", multi_class="ovr")
+                all_labels, all_probs, average="macro", multi_class="ovr"
+            )
         except ValueError:
             macro_auc = 0.0
 
-        # Classification report
-        preds = (all_probs > self.threshold).astype(int)
+        preds = np.argmax(all_probs, axis=1)
         report = classification_report(
             all_labels, preds,
             target_names=self.class_names,

@@ -210,3 +210,6 @@ __marimo__/
 *.jpg
 *.csv
 *.pt
+.DS_Store
+archive
+__MACOSX

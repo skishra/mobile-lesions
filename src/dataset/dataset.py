@@ -13,7 +13,6 @@ class ISIC2019Dataset(Dataset):
         self.transform = transform
         self.img_ext = img_ext
 
-        # Class columns (everything except 'image')
         self.classes = self.df.columns[1:].tolist()
 
         if "image" not in self.df.columns:
@@ -22,7 +21,6 @@ class ISIC2019Dataset(Dataset):
 
         self.label_columns = [c for c in self.df.columns if c != "image"]
 
-        # Pre-resolve paths when auto-detecting extension
         if self.img_ext is None:
             self._path_cache = {
                 img_id: self._resolve_path(img_id)
@@ -65,7 +63,7 @@ def main():
     from torch.utils.data import DataLoader
 
     csv_file = Path("src/dataset/after_split/test.csv")
-    image_dir = Path("src/dataset/lesions-kaggle/ISIC_2019_Training_Input/")
+    image_dir = Path("src/dataset/archive/ISIC_2019_Training_Input/ISIC_2019_Training_Input/")
 
     transform = transforms.Compose([
         transforms.Resize((256, 256)),
