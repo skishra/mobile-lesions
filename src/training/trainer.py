@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from datetime import datetime
 from sklearn.metrics import roc_auc_score, classification_report
 import torch.nn as nn
 from tqdm import tqdm
@@ -54,7 +55,7 @@ class Trainer:
 
         self.criterion = nn.CrossEntropyLoss(weight=class_weight)
 
-        self.best_val_loss = float("inf")
+        self.best_val_auc = -float("inf")
         self.epochs_without_improvement = 0
 
         self.history = {"train_loss": [], "val_loss": [], "val_auc": []}
@@ -112,7 +113,8 @@ class Trainer:
                 class_counts[c] += (labels == c).sum().item()
 
         total_samples = class_counts.sum()
-        class_weight = total_samples / (num_classes * class_counts.clamp(min=1.0))
+        class_weight = total_samples / \
+            (num_classes * class_counts.clamp(min=1.0))
 
         if mode == "sqrt":
             class_weight = torch.sqrt(class_weight)
@@ -166,10 +168,10 @@ class Trainer:
             auc = roc_auc_score(all_labels, all_probs,
                                 average="macro", multi_class="ovr")
         except ValueError:
-            auc = 0.0  
+            auc = 0.0
 
         preds = np.argmax(all_probs, axis=1)
-        
+
         report = classification_report(
             all_labels,
             preds,
@@ -204,19 +206,19 @@ class Trainer:
                 print(
                     f"  Val Loss:   {val_loss:.4f}  |  Val AUC: {val_auc:.4f}")
 
-                if val_loss < self.best_val_loss:
-                    self.best_val_loss = val_loss
+                if val_auc > self.best_val_auc:
+                    self.best_val_auc = val_auc
                     self.epochs_without_improvement = 0
                     torch.save(self.model.state_dict(), self.save_path)
                     print("  Saved best model")
                 else:
                     self.epochs_without_improvement += 1
                     print(
-                        f"  No improvement for {self.epochs_without_improvement}/{self.patience} epochs"
+                        f"  No improvement in Val AUC for {self.epochs_without_improvement}/{self.patience} epochs"
                     )
 
                 if self.epochs_without_improvement >= self.patience:
-                    print(f"\nEarly stopping at epoch {epoch + 1}")
+                    print(f"\nEarly stopping triggered at epoch {epoch + 1}")
                     break
 
                 self._step_scheduler(val_loss)
@@ -224,14 +226,14 @@ class Trainer:
         if self.val_loader is not None:
             self.model.load_state_dict(torch.load(
                 self.save_path, map_location=self.device))
-            print(f"\nLoaded best model (val_loss={self.best_val_loss:.4f})")
+            print(f"\nLoaded best model (val_auc={self.best_val_auc:.4f})")
 
         return self.history
 
     def test(self, test_loader):
         self.model.load_state_dict(torch.load(
             self.save_path, map_location=self.device))
-        
+
         evaluator = Evaluator(
             self.model, test_loader,
             device=self.device,
@@ -273,10 +275,11 @@ def main():
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
 
-    train_csv = Path("src/dataset/after_split/train.csv")
-    val_csv = Path("src/dataset/after_split/val.csv")
-    test_csv = Path("src/dataset/after_split/test.csv")
-    image_dir = Path("src/dataset/archive/ISIC_2019_Training_Input/ISIC_2019_Training_Input/")
+    train_csv = Path("src/dataset/archive/after_split/train.csv")
+    val_csv = Path("src/dataset/archive/after_split/val.csv")
+    test_csv = Path("src/dataset/archive/after_split/test.csv")
+    image_dir = Path(
+        "src/dataset/archive/ISIC_2019_Training_Input/ISIC_2019_Training_Input/")
 
     train_dataset = ISIC2019Dataset(
         csv_file=train_csv, image_dir=image_dir, transform=train_transform)
@@ -303,12 +306,16 @@ def main():
         "mobilenetv4_conv_medium.e500_r256_in1k",
         pretrained=True,
         num_classes=len(train_dataset.classes),
+        drop_rate=0.3,
     )
 
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=1e-4, weight_decay=1e-4)
+        model.parameters(), lr=1e-4, weight_decay=1e-3)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30)
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M")
+    save_path = f"best_model_{timestamp}.pt"
 
     trainer = Trainer(
         model=model,
@@ -316,13 +323,14 @@ def main():
         val_loader=val_loader,
         optimizer=optimizer,
         scheduler=scheduler,
+        save_path=save_path,
         patience=7,
         class_names=train_dataset.classes,
-        class_weight="log1p",
-        max_class_weight=3.0,
+        class_weight="sqrt",
+        max_class_weight=2.0,
     )
 
-    history = trainer.fit(epochs=20)
+    history = trainer.fit(epochs=30)
     trainer.test(test_loader)
 
 

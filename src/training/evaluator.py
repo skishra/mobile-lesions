@@ -37,7 +37,7 @@ class Evaluator:
             loss = self.criterion(outputs, labels)
 
             total_loss += loss.item()
-            
+
             probs = torch.softmax(outputs, dim=1).cpu().numpy()
             all_probs.append(probs)
             all_labels.append(labels.cpu().numpy())
@@ -47,12 +47,13 @@ class Evaluator:
         all_labels = np.concatenate(all_labels, axis=0)
         avg_loss = total_loss / len(self.test_loader)
 
-        num_classes = len(self.class_names) if self.class_names else all_probs.shape[1]
+        num_classes = len(
+            self.class_names) if self.class_names else all_probs.shape[1]
         per_class_auc = {}
-        
+
         for i in range(num_classes):
             binary_labels_for_class = (all_labels == i).astype(int)
-            
+
             if len(np.unique(binary_labels_for_class)) < 2:
                 per_class_auc[i] = float("nan")
             else:
@@ -99,7 +100,7 @@ def main():
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
 
-    test_csv = Path("src/dataset/after_split/test.csv")
+    test_csv = Path("src/dataset/archive/after_split/test.csv")
     image_dir = Path("src/dataset/lesions-kaggle/ISIC_2019_Training_Input/")
 
     test_dataset = ISIC2019Dataset(

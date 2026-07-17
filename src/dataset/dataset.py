@@ -62,8 +62,9 @@ def main():
     from torchvision import transforms
     from torch.utils.data import DataLoader
 
-    csv_file = Path("src/dataset/after_split/test.csv")
-    image_dir = Path("src/dataset/archive/ISIC_2019_Training_Input/ISIC_2019_Training_Input/")
+    csv_file = Path("src/dataset/archive/after_split/test.csv")
+    image_dir = Path(
+        "src/dataset/archive/ISIC_2019_Training_Input/ISIC_2019_Training_Input/")
 
     transform = transforms.Compose([
         transforms.Resize((256, 256)),

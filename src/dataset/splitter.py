@@ -7,32 +7,52 @@ from sklearn.model_selection import train_test_split
 
 LABEL_COLS = ["MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"]
 
+
 def extract_archive_if_needed():
-    dir = Path("src/dataset")
-    archive_dir = dir / "archive"
-    zip_file = dir / "archive.zip"
+    base_dir = Path("src/dataset")
+    archive_dir = base_dir / "archive"
+    zip_file = base_dir / "archive.zip"
 
     if archive_dir.is_dir():
-        if any(archive_dir.iterdir()): 
+        if any(archive_dir.iterdir()):
             if zip_file.is_file():
                 zip_file.unlink()
-                print("The 'archive' subdirectory already exists. 'archive.zip' deleted.")
+                print(
+                    "The 'archive' subdirectory already exists. 'archive.zip' deleted.")
             else:
                 print("The 'archive' subdirectory already exists.")
             return
         else:
-            print("The 'archive' directory exists but is empty. Proceeding with extraction...")
-    
+            print(
+                "The 'archive' directory exists but is empty. Proceeding with extraction...")
+
     if zip_file.is_file():
         try:
-            print("Extracting 'archive.zip'")
+            print("Extracting 'archive.zip'...")
+
+            archive_dir.mkdir(parents=True, exist_ok=True)
+
             with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                zip_ref.extractall(dir)
+                for member in zip_ref.infolist():
+                    member_path = Path(member.filename)
+                    if member_path.parts and member_path.parts[0] == "archive":
+                        relative_path = Path(*member_path.parts[1:])
+                    else:
+                        relative_path = member_path
+
+                    target_path = archive_dir / relative_path
+
+                    if member.is_dir():
+                        target_path.mkdir(parents=True, exist_ok=True)
+                    else:
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                            target.write(source.read())
+
             print("Extraction complete.")
-            
             zip_file.unlink()
             print("'archive.zip' has been deleted.")
-            
+
         except (zipfile.BadZipFile, PermissionError) as e:
             print(f"Extraction failed: {e}")
             print("'archive.zip' was not deleted.")
@@ -44,9 +64,9 @@ def drop_zero_variance_numeric(df: pd.DataFrame) -> pd.DataFrame:
     """Drops only numeric columns with a mathematical variance of exactly 0."""
 
     numeric_df = df.select_dtypes(include='number')
-    
+
     zero_var_cols = numeric_df.columns[numeric_df.var() == 0]
-    
+
     return df.drop(columns=zero_var_cols)
 
 
@@ -118,7 +138,7 @@ def main():
 
     gt_path = Path(
         "src/dataset/archive/ISIC_2019_Training_GroundTruth.csv")
-    split_dir = Path("src/dataset/after_split")
+    split_dir = Path("src/dataset/archive/after_split")
 
     df = load_ground_truth(gt_path)
     train_df, val_df, test_df = stratified_split(df)
