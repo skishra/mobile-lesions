@@ -94,9 +94,6 @@ class Trainer:
 
     @staticmethod
     def _compute_class_weight(loader, mode="raw", max_weight=None):
-        """Compute class_weight = total_samples / (num_classes * class_samples) 
-        to handle single-label multi-class imbalance.
-        """
 
         first_batch_labels = next(iter(loader))[1]
         if first_batch_labels.ndim > 1:
@@ -131,7 +128,6 @@ class Trainer:
 
     @torch.no_grad()
     def evaluate(self, loader, desc="Validation"):
-        """Run evaluation on any loader. Returns loss, AUC, and classification report."""
         self.model.eval()
         total_loss = 0.0
 
